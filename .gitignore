@@ -1,2 +1,4 @@
 /venv
 /.vscode
+/lib/bot/token
+*.pyc
