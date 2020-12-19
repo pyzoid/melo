@@ -10,6 +10,8 @@ import random
 import itertools
 from async_timeout import timeout
 
+Client = discord.Client()
+
 #inspired heavily by https://gist.github.com/vbe0201/ade9b80f2d3b64643d854938d40a0a2d
 
 # Suppress noise about console usage from errors
@@ -132,7 +134,7 @@ class VoiceState:
         self._ctx = ctx
         self.current = None
         self.voice = None
-        self.dead = False
+        self.stale = False
         self.next = asyncio.Event()
         self.songs = SongQueue()
         self._loop = False
@@ -177,7 +179,7 @@ class VoiceState:
                         self.current = await self.songs.get()
                 except asyncio.TimeoutError:
                     self.bot.loop.create_task(self.stop())
-                    self.dead = True
+                    self.stale = True
                     return
             
             self.current.source.volume = self._volume
@@ -199,11 +201,17 @@ class VoiceState:
             self.voice.stop()
 
     async def stop(self):
-        self.songs.clear()
 
+        self.songs.clear()
         if self.voice:
             await self.voice.disconnect()
             self.voice = None
+
+    def revive(self):
+        if self.stale:
+            self.audio_player = self.bot.loop.create_task(self.audio_player_task())
+            self.stale = False
+
 
 class Music(Cog):
     def __init__(self, bot: commands.Bot):
@@ -212,15 +220,17 @@ class Music(Cog):
 
     def get_voice_state(self, ctx: commands.Context):
         state = self.voice_states.get(ctx.guild.id)
-        if not state or state.dead:
+        if not state:
             state = VoiceState(self.bot, ctx)
             self.voice_states[ctx.guild.id] = state
         
+        if state.stale:
+            state.revive()
         return state
 
     async def cog_before_invoke(self, ctx: commands.Context):
         ctx.voice_state = self.get_voice_state(ctx)
-
+        
     @Cog.listener()
     async def on_ready(self):
         if not self.bot.ready:
@@ -256,24 +266,57 @@ class Music(Cog):
     @commands.command(name="pause")
     async def _pause(self, ctx: commands.Context):
         
-        if ctx.voice_state.is_playing and ctx.voice_state.voice:
+        if ctx.voice_state.is_playing and ctx.voice_state.current:
             ctx.voice_state.voice.pause()
             await ctx.send("Paused")
     
     @commands.command(name="resume")
     async def _resume(self, ctx: commands.Context):
         
-        if not ctx.voice_state.is_playing and ctx.voice_state.voice:
+        if not ctx.voice_state.is_playing and ctx.voice_state.current:
             ctx.voice_state.voice.resume()
             await ctx.send("Resumed")
     
     @commands.command(name='stop')
     async def _stop(self, ctx: commands.Context):
 
-        ctx.voice_state.songs.clear()
+        
+        if ctx.voice_state:
+            ctx.voice_state.songs.clear()
+            await ctx.voice_state.stop()
+    
+    @commands.command(name='restart')
+    async def _restart(self, ctx: commands.Context):
+        
+        if ctx.voice_state.voice:
+            await ctx.voice_state.voice.disconnect()
+        else:
+            #todo, can't disconnect if voice in None, so if bot restarts voice info gets reset
+            #so users can't make bot leave thro command, it has to timeout of hav mod manually disconnet it
+            pass
 
-        if ctx.voice_state.current:
-            ctx.voice_state.voice.stop()
+        if self.voice_states.get(ctx.guild.id):
 
+            del self.voice_states[ctx.guild.id]
+        
+        ctx.voice_state = self.get_voice_state(ctx)
+
+        await ctx.send("VoiceState succesfully reset")
+
+    @commands.command(name='volume')
+    async def _volume(self, ctx: commands.Context, * ,volume: int):
+
+        if not ctx.voice_state.voice:
+            return await ctx.send("No player instance to set volume for")
+
+        if 0 > volume > 100:
+            return await ctx.send("Volume must be between 0 and 100")
+        
+        ctx.voice_state.volume = volume / 100
+
+        await ctx.send('Volume of the player set to {}%'.format(volume))
+
+
+        
 def setup(bot):
     bot.add_cog(Music(bot))
