@@ -11,7 +11,8 @@ class Meta(Cog):
 
     @command(name="info", aliases=["about"])
     async def info(self, ctx, *, message):
-        await ctx.send("test")
+        embed=discord.Embed(title="music-man", description="by badcode6 and Meschdog18")
+        await ctx.send(embed=embed)
 
     
 
