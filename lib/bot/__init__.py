@@ -1,7 +1,9 @@
 from glob import glob
 from asyncio import sleep
 from discord.ext.commands import Bot as BotBase
-from discord.ext.commands import CommandNotFound, Context
+from discord.ext.commands import CommandNotFound, Context, MissingRequiredArgument
+from discord.http import HTTPException, Forbidden
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 PREFIX = "?"
 OWNER_IDS = [226939988070236161]
@@ -56,8 +58,12 @@ class Bot(BotBase):
     async def on_command_error(self, ctx, exc):
         if isinstance(exc, CommandNotFound):
             pass
-        elif hasattr(exc, "original"):
-            raise exc.original
+        elif isinstance(exc, HTTPException):
+            await ctx.send("Unable to send message")
+        elif isinstance(exc, Forbidden):
+            await ctx.send("Invalid permissions to preform action")
+        elif isinstance(exc, MissingRequiredArgument):
+            await ctx.send("Missing required arguments for command")
         else:
             raise exc
           
@@ -80,6 +86,6 @@ class Bot(BotBase):
         if ctx.command is not None and ctx.guild is not None:
             if self.ready:
                 await self.invoke(ctx)
-        else:
-            await ctx.send("Bot still starting, please wait a few moments...")
+            else:
+                await ctx.send("Bot still starting, please wait a few moments...")
 bot = Bot()
