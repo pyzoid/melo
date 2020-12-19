@@ -132,6 +132,7 @@ class VoiceState:
         self._ctx = ctx
         self.current = None
         self.voice = None
+        self.dead = False
         self.next = asyncio.Event()
         self.songs = SongQueue()
         self._loop = False
@@ -168,7 +169,7 @@ class VoiceState:
     async def audio_player_task(self):
         while 1:
             self.next.clear()
-
+            self.current = None
             if not self.loop:
                 #waits 3 mins for new song, else disconnects
                 try:
@@ -176,6 +177,7 @@ class VoiceState:
                         self.current = await self.songs.get()
                 except asyncio.TimeoutError:
                     self.bot.loop.create_task(self.stop())
+                    self.dead = True
                     return
             
             self.current.source.volume = self._volume
@@ -210,7 +212,7 @@ class Music(Cog):
 
     def get_voice_state(self, ctx: commands.Context):
         state = self.voice_states.get(ctx.guild.id)
-        if not state:
+        if not state or state.dead:
             state = VoiceState(self.bot, ctx)
             self.voice_states[ctx.guild.id] = state
         
@@ -254,15 +256,14 @@ class Music(Cog):
     @commands.command(name="pause")
     async def _pause(self, ctx: commands.Context):
         
-        if ctx.voice_state.is_playing:
+        if ctx.voice_state.is_playing and ctx.voice_state.voice:
             ctx.voice_state.voice.pause()
             await ctx.send("Paused")
     
     @commands.command(name="resume")
     async def _resume(self, ctx: commands.Context):
         
-        print(ctx.voice_state.is_playing)
-        if not ctx.voice_state.is_playing:
+        if not ctx.voice_state.is_playing and ctx.voice_state.voice:
             ctx.voice_state.voice.resume()
             await ctx.send("Resumed")
     
@@ -273,6 +274,6 @@ class Music(Cog):
 
         if ctx.voice_state.current:
             ctx.voice_state.voice.stop()
-            
+
 def setup(bot):
     bot.add_cog(Music(bot))
