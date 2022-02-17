@@ -1,5 +1,6 @@
 from discord.ext.commands import Cog
 from discord.ext.commands import command
+
 class Fun(Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -17,8 +18,6 @@ class Fun(Cog):
     async def echo_message(self, ctx, *, message):
         await ctx.message.delete()
         await ctx.send(message)
-
-    
 
 def setup(bot):
     bot.add_cog(Fun(bot))

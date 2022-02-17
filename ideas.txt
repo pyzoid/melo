@@ -1,0 +1,5 @@
+use channel threads for nlp processing
+
+add suport for fague requests, aka "hey jarvis, play some pop music"
+
+add "radio" feature, plays infinite similar music to initally request song, or specific genre
