@@ -8,7 +8,7 @@ class Meta(Cog):
     @Cog.listener()
     async def on_ready(self):
         if not self.bot.ready:
-            self.bot.cogs_ready.ready_up(__file__.split("/")[-1][:-3]) 
+            self.bot.cogs_ready.ready_up(__file__.split("/")[-1][:-3].split("\\")[-1]) 
 
     @command(name="info", aliases=["about"])
     async def info(self, ctx):

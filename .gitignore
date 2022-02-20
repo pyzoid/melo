@@ -5,3 +5,5 @@
 bert_weights.h5
 model/uncased_L-12_H-768_A-12
 *.csv
+.DS_Store
+lib/bot/lavanode.json

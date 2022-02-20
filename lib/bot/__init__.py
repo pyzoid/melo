@@ -3,12 +3,13 @@ from asyncio import sleep
 from discord.ext.commands import Bot as BotBase
 from discord.ext.commands import CommandNotFound, Context, MissingRequiredArgument
 from discord.http import HTTPException, Forbidden
-
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import discord
 
 PREFIX = "?"
 OWNER_IDS = [226939988070236161]
-COGS = [path.split("/")[-1][:-3] for path in glob("./lib/cogs/*.py")]
+COGS = [path.split("/")[-1][:-3].split("\\")[-1] for path in glob("./lib/cogs/*.py")]
+
+Intents=discord.Intents.all()
 
 class CogReady(object):
     def __init__(self):
@@ -27,18 +28,18 @@ class Bot(BotBase):
         self.PREFIX = PREFIX
         self.ready = False
         self.cogs_ready = CogReady()
-        self.scheduler = AsyncIOScheduler()
-
+       
         self.nlp = None
         self.model = None
         self.matcher = None
 
-        super().__init__(command_prefix=PREFIX, owner_ids=OWNER_IDS)
+        super().__init__(command_prefix=PREFIX, owner_ids=OWNER_IDS, intents=Intents, auto_sync_commands=True)
 
     def setup(self, enable_ml):
         for cog in COGS:
             self.load_extension(f"lib.cogs.{cog}")
             print(f"{cog} cog loaded".capitalize())
+            
 
         if enable_ml:
             import stanza
@@ -93,6 +94,7 @@ class Bot(BotBase):
                 await sleep(0.5)
             self.ready = True
             print("Bot ready")
+            
             
         else:
             print("Bot reconnected")

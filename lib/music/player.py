@@ -1,8 +1,10 @@
+from abc import ABC, abstractmethod
 from lib.menu import PlayerMenu
 from lib.music.source import YTDLSource
+from lib.util.asynctools import await_me_maybe
 import asyncio
 from contextlib import suppress
-
+import pomice
 from enum import Enum
 import random
 import itertools
@@ -26,7 +28,7 @@ class PlayerWindowState(Enum):
 class PlayerContext():
     TIMEOUT = 60
 
-    def __init__(self, ctx, bot):
+    def __init__(self, ctx, bot, lava_enabled=False):
         self._ctx = ctx
         self._bot = bot
         self.loop = bot.loop
@@ -42,6 +44,8 @@ class PlayerContext():
 
         self._song_skipped = False
 
+        self.lava_enabled = lava_enabled
+
     @property
     def player(self):
         return self._player
@@ -50,17 +54,18 @@ class PlayerContext():
     def is_stale(self):
         return self._player.state == PlayerState.STALE or self._player_window.state == PlayerWindowState.STALE
 
-    def skip(self):
+    async def skip(self):
         if self.current:
             self.current = None
-            self._player.skip()
+            await self._player.skip()
             
-    def stop(self):
+    async def stop(self): 
         self.current = None
         self.queue.clear()
-        self._player.stop()
+        await self._player.stop()
 
-    async def play(self, song):
+    async def play(self, source):
+        song = Song(LavaSourceAdapter(source) if self.lava_enabled else YTDLSourceAdapter(source))
         await self.queue.put(song)
 
         if not self._run_player_task:
@@ -75,9 +80,6 @@ class PlayerContext():
             raise VoiceError(str(error))
 
         self._next.set()
-        
-
-
 
     async def _run(self):
         async with self._run_lock:
@@ -86,11 +88,11 @@ class PlayerContext():
                     
                 self.current = song
 
-                self.loop.create_task(self._player.audio_player(song, self._playback_finished))
+                self.loop.create_task(self._player.play_track(song, self._playback_finished if not self.lava_enabled else None))
                 self.loop.create_task(self._player_window.player_window(song, PlayerContext.TIMEOUT))
                 try:
                     if song:
-                        await asyncio.wait_for(self._next.wait(), song.source.raw_duration)
+                        await asyncio.wait_for(self._next.wait(), song.track.raw_duration)
                     else:
                         await asyncio.wait_for(self.queue.item_available(), PlayerContext.TIMEOUT)
                 except asyncio.TimeoutError:
@@ -100,7 +102,7 @@ class PlayerContext():
                     break
                 else:
                     if song:
-                        print(f"Finished playing {song.source.title}")
+                        print(f"Finished playing {song.track.title}")
                 finally:
                     self._next.clear()
 
@@ -116,31 +118,94 @@ class PlayerContext():
     
     @player.setter
     def player(self, voice_client):
-        self._player = Player(self._bot, voice_client)
+        self._player = BasicPlayer(self._bot, voice_client) if not self.lava_enabled else LavaPlayer(self._bot, voice_client)
         self._player_window = PlayerWindow(self._bot, self._ctx)
 
 class Song:
-    __slots__ = ('source', 'requester') #more mem efficent and faster than __dict__
+    __slots__ = ('track') #more mem efficent and faster than __dict__
 
-    def __init__(self, source: YTDLSource):
-        self.source = source
-        self.requester = source.requester
+    def __init__(self, track):
+        self.track = track
 
     def create_embed(self):
-        return (discord.Embed(title='```{0.source.title}\n```'.format(self), color=discord.Color.blurple())
-        .set_image(url=self.source.thumbnail)
+        return (discord.Embed(title='```{0.track.title}\n```'.format(self), color=discord.Color.blurple())
+        .set_image(url=self.track.thumbnail)
         #.add_field(name='Requested by', value=self.requester.mention)
         #.add_field(name='Uploader', value='[{0.source.uploader}]({0.source.uploader_url})'.format(self))
         #.add_field(name='URL', value='[Click]({0.source.url})'.format(self))
         .set_author(name="Now playing")
-        .set_footer(text="Duration - "+self.source.duration))
+        .set_footer(text="Duration - "+self.track.length))
     
     @staticmethod
     def create_empty_embed():
         return (discord.Embed(title='```No Current Songs In Queue\n```', color=discord.Color.blurple())
         .set_image(url='https://www.clipartmax.com/png/middle/307-3076576_song-clipart-music-bar-paper.png')
         .set_author(name="Now playing"))
+class BaseSourceAdapter(ABC):
+    
+    @property
+    @abstractmethod
+    def thumbnail(self):
+        ...
 
+    @property
+    @abstractmethod
+    def length(self):
+        ...
+
+    @property
+    @abstractmethod
+    def raw_duration(self):
+        ...
+
+    @property
+    @abstractmethod
+    def title(self):
+        ...
+
+class YTDLSourceAdapter(BaseSourceAdapter):
+    def __init__(self, source):
+        self.source = source
+
+    @property
+    def thumbnail(self):
+        return self.source.thumbnail
+
+    @property
+    def length(self):
+        return self.source.duration
+    
+    @property
+    def raw_duration(self):
+        return self.source.raw_duration
+    
+    @property
+    def title(self):
+        return self.source.title
+
+class LavaSourceAdapter(BaseSourceAdapter):
+    def __init__(self, source) -> None:
+        self.source = source
+    
+    def _toSeconds(self, ms):
+        return int(ms/1000)
+
+    @property
+    def thumbnail(self):
+        return self.source.thumbnail
+    @property
+    def length(self):
+        return YTDLSource.parse_duration(self._toSeconds(self.source.length))
+    
+    @property
+    def raw_duration(self):
+        return self._toSeconds(self.source.length)
+    
+    @property
+    def title(self):
+        return self.source.title
+
+        
 class SongQueue(asyncio.Queue):
     def __getitem__(self, item):
         if isinstance(item, slice):
@@ -170,60 +235,143 @@ class SongQueue(asyncio.Queue):
 
             await asyncio.sleep(.5) #try not to waste cpu cycles
 
-            
-
-class Player(): #rename AudioPlayer
-    def __init__(self, bot, voice_client):
+class BasePlayer(ABC):
+    def __init__(self) -> None:
         self.state = PlayerState.STOPPED
-        self.bot = bot
-        self.voice = voice_client
-        self.loop = bot.loop
-
         self.current = None
-
-
-    async def stale(self):
+    
+    def stale(self):
         self.state = PlayerState.STALE
-        await self.voice.disconnect()
+        self._stale()
 
-    def stop(self):
+    async def stop(self):
         self.state = PlayerState.STOPPED
-        self.voice.stop()
+        await await_me_maybe(self._stop)
 
-    def wait(self):
+    async def wait(self):
         self.state = PlayerState.WAITING
-        self.voice.stop()
+        await await_me_maybe(self._wait)
 
-    def skip(self):
-        self.wait()
+    async def skip(self):
+        await await_me_maybe(self._skip)
 
-    def resume(self):
+    async def resume(self):
         self.state = PlayerState.PLAYING
-        self.voice.resume()
+        await await_me_maybe(self._resume)
 
-    def pause(self):
+    async def pause(self):
         self.state = PlayerState.PAUSED
-        self.voice.pause()
+        await await_me_maybe(self._pause)
 
-    async def audio_player(self, song, finished_callback):
-
+    async def play_track(self, track, callback=None):
         if self.state == PlayerState.STALE:
             return
             
-        if not song:
-            self.wait()
+        if not track:
+            await self.wait()
             return
         else:
             self.state = PlayerState.PLAYING
 
         if not self.state == PlayerState.STOPPED:
-                    
-            self.current = song
+            self.current = track
 
-            self.voice.play(song.source, after=finished_callback)
+            def iap(): #could prob just make lambda function or something
+                return self._internal_audio_player(track, callback) if callback else self._internal_audio_player(track)
 
-            self.state = PlayerState.PLAYING
+            await iap()
+
+    @abstractmethod
+    def _stale(self):
+        ...
+
+    @abstractmethod
+    def _stop(self):
+        ...
+
+    @abstractmethod
+    def _wait(self):
+        ...
+
+    @abstractmethod
+    def _skip(self):
+        ...
+
+    @abstractmethod
+    def _resume(self):
+        ...
+
+    @abstractmethod
+    def _pause(self):
+        ...
+
+    @abstractmethod
+    async def _internal_audio_player(self, track, callback):
+        ...
+
+class BasicPlayer(BasePlayer):
+    def __init__(self, bot, voice_client):
+        self.bot = bot
+        self.voice = voice_client
+        self.loop = bot.loop
+
+        self.current = None
+        super().__init__()
+
+    def _stale(self):
+        async def disconnect(self):
+            await self.voice.disconnect()
+        
+        future = asyncio.ensure_future(disconnect(), loop=self.loop)
+
+
+    def _stop(self):
+        self.voice.stop()
+
+    def _wait(self):
+        self.voice.stop()
+
+    def _skip(self):
+        self._wait()
+
+    def _resume(self):
+        self.voice.resume()
+
+    def _pause(self):
+        self.voice.pause()
+
+    async def _internal_audio_player(self, song, finished_callback):
+
+        self.voice.play(song.track.source, after=finished_callback)
+
+        self.state = PlayerState.PLAYING
             
+class LavaPlayer(BasicPlayer):
+    def __init__(self, bot, voice_client):
+        super().__init__(bot, voice_client)
+
+    def _stop(self):
+        return self.voice.stop()
+
+    def _wait(self):
+        return self.voice.stop()
+
+    def _skip(self):
+        return self._wait()
+
+    def _pause(self):
+        
+        return self.voice.set_pause(True)
+
+    def _resume(self):
+
+        return self.voice.set_pause(False)
+
+    async def _internal_audio_player(self, song):
+
+        await self.voice.play(song.track.source)
+
+        self.state = PlayerState.PLAYING
 
 class PlayerWindow():
     def __init__(self, bot, ctx):
@@ -249,12 +397,12 @@ class PlayerWindow():
         
 
         if not self._menu or not self._current_window:
-            self._menu = PlayerMenu(self.bot, song.source.raw_duration if song else timeout)
+            self._menu = PlayerMenu(self.bot, song.track.raw_duration if song else timeout)
             await self._menu.send_initial_message(self._ctx, self._ctx.channel, create_player_embed(song))
             self._current_window = self._menu.message
         else:
             await self._current_window.edit(embed=create_player_embed(song))
-            self._menu = PlayerMenu(self.bot, song.source.raw_duration if song else timeout, self._current_window)
+            self._menu = PlayerMenu(self.bot, song.track.raw_duration if song else timeout, self._current_window)
             #restarts reaction menu when new song is added
             #self._menu = await PlayerMenu.construct_from_existing(self._current_window, self.bot, song.source.raw_duration if song else timeout)
         
