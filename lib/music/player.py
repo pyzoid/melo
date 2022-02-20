@@ -240,9 +240,9 @@ class BasePlayer(ABC):
         self.state = PlayerState.STOPPED
         self.current = None
     
-    def stale(self):
+    async def stale(self):
         self.state = PlayerState.STALE
-        self._stale()
+        await await_me_maybe(self._stale)
 
     async def stop(self):
         self.state = PlayerState.STOPPED
@@ -319,12 +319,8 @@ class BasicPlayer(BasePlayer):
         super().__init__()
 
     def _stale(self):
-        async def disconnect(self):
-            await self.voice.disconnect()
+        return self.voice.disconnect()
         
-        future = asyncio.ensure_future(disconnect(), loop=self.loop)
-
-
     def _stop(self):
         self.voice.stop()
 
@@ -384,7 +380,7 @@ class PlayerWindow():
     
     async def stale(self):
         self.state = PlayerWindowState.STALE
-        await self._player_window.player_window.delete()
+        await self._current_window.delete()
         self._menu = None
 
     async def player_window(self, song, timeout):

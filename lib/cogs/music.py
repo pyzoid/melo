@@ -30,7 +30,7 @@ class Music(Cog):
     def load_config(self, filename):
         with open(filename, "r") as f:
             return json.load(f)  
-
+    
     async def start_nodes(self):    
         config = self.load_config("lib/bot/lavanode.json")
          
@@ -75,6 +75,16 @@ class Music(Cog):
         if not self.bot.ready:
             self.bot.cogs_ready.ready_up(__file__.split("/")[-1][:-3].split("\\")[-1]) 
 
+    @command(name="stats") 
+    async def _stats(self, ctx):
+        stats = self.pomice.get_node(identifier="MAIN").stats
+        await ctx.send(embed=(discord.Embed(title="Node Stats", color=discord.Color.dark_red()))
+        .add_field(name="CPU_CORES", value=stats.cpu_cores, inline=True)
+        .add_field(name="CPU_PROCESS_LOAD", value=stats.cpu_process_load, inline=True)
+        .add_field(name="ACTIVE_PLAYERS", value=stats.players_active, inline=True)
+        .add_field(name="TOTAL_PLAYERS", value=stats.players_total,inline=True))
+
+
     @command(name="play")
     async def _play(self, ctx, *, query):
         if not hasattr(ctx, "voice_state"):
@@ -99,12 +109,12 @@ class Music(Cog):
                     else:
                         ctx.player_context.player = await channel.connect() 
 
-                if not ctx.player_context.player.voice.is_connected():
+                if not ctx.player_context.player.voice.is_connected:
                     ctx.player_context.player = get(ctx.bot.voice_clients, guild=ctx.guild)
         else:
             if ctx.voice_client:
                 if ctx.voice_client.is_connected:
-                    ctx.player_context = ctx.voice_client
+                    ctx.player_context.player = ctx.voice_client
 
             if ctx.player_context.lava_enabled:
                 ctx.player_context.player = await channel.connect(cls=pomice.player.Player) 
