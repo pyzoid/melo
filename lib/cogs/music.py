@@ -3,17 +3,10 @@ from discord.ext.commands import command
 from discord.ext import commands
 import discord
 import youtube_dl
-import asyncio
 import pomice
 import json
-import functools
 from discord.utils import get
-import random
-import itertools
-from async_timeout import timeout
-from lib.menu import PlayerMenu
 from lib.music.source import YTDLSource, YTDLError
-#inspired heavily by https://gist.github.com/vbe0201/ade9b80f2d3b64643d854938d40a0a2d
 
 # Suppress noise about console usage from errors
 youtube_dl.utils.bug_reports_message = lambda: ''
@@ -26,7 +19,9 @@ class Music(Cog):
         self.player_contexts = {}
         self.lava = True
         self.pomice = pomice.NodePool()
+        self.node = None
 
+        
     def load_config(self, filename):
         with open(filename, "r") as f:
             return json.load(f)  
@@ -37,18 +32,29 @@ class Music(Cog):
         await self.bot.wait_until_ready()
         print("Connecting to lavalink node...")
         try:
-            await self.pomice.create_node(
-                bot=self.bot,
-                host=config.get("ip"),
-                port=config.get("port"),
-                password=config.get("password"),
-                identifier="MAIN"
-                )
-        except Exception as ex:
-            print(f"Failed to connect to lavalink node: {repr(ex)}, Using basic player instead")
-            self.lava = False
+            self.node = self.pomice.get_best_node(algorithm=pomice.NodeAlgorithm.by_ping)
+        except pomice.NoNodesAvailable:
+            print("No node found, creating one now...")
+
+            try:
+                self.node = await self.pomice.create_node(
+                    bot=self.bot,
+                    host=config.get("ip"),
+                    port=config.get("port"),
+                    password=config.get("password"),
+                    identifier="MAIN"
+                    )
+            except Exception as ex:
+                print(f"Failed to connect to lavalink node: {repr(ex)}, Using basic player instead")
+                self.lava = False
+                return
+            else:
+                print("Node created")
+
         else:
-            print("Node connected")
+            await self.node.connect()
+        
+        print("Node connected")
 
 
     @commands.Cog.listener()
@@ -59,11 +65,9 @@ class Music(Cog):
     def get_player_context(self, ctx: commands.Context, reset=False):
         context = self.player_contexts.get(ctx.guild.id)
         if not context or reset:
-            context = PlayerContext(ctx, self.bot, self.lava)#VoiceState(self.bot, ctx)
+            context = PlayerContext(ctx, self.bot, self.lava, self.node)
             self.player_contexts[ctx.guild.id] = context
-        
-        #if state.stale:
-        #    state.revive()
+
         return context
 
     async def cog_before_invoke(self, ctx: commands.Context):
@@ -123,7 +127,11 @@ class Music(Cog):
 
         try:
             if ctx.player_context.lava_enabled:
-                source = (await ctx.player_context.player.voice.get_tracks(query, ctx=ctx))[0]
+                source = await ctx.player_context.player.voice.get_tracks(query, ctx=ctx)
+                if isinstance(source, pomice.Playlist):
+                    source = source.tracks
+                else:
+                    source = (await ctx.player_context.player.voice.get_tracks(query, ctx=ctx))[0]
             else:
                 source = await YTDLSource.create_source(ctx, query, loop=self.bot.loop)
         except YTDLError as e:
@@ -162,9 +170,6 @@ class Music(Cog):
             await ctx.player_context.skip()
     @commands.command(name='restart')
     async def _restart(self, ctx: commands.Context):
-        
-        #if not ctx.voice_state:
-        #    return
 
         ctx.player_context.player.stop()
 

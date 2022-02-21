@@ -3,8 +3,6 @@ from lib.menu import PlayerMenu
 from lib.music.source import YTDLSource
 from lib.util.asynctools import await_me_maybe
 import asyncio
-from contextlib import suppress
-import pomice
 from enum import Enum
 import random
 import itertools
@@ -28,7 +26,7 @@ class PlayerWindowState(Enum):
 class PlayerContext():
     TIMEOUT = 60
 
-    def __init__(self, ctx, bot, lava_enabled=False):
+    def __init__(self, ctx, bot, lava_enabled=False, lava_node=None):
         self._ctx = ctx
         self._bot = bot
         self.loop = bot.loop
@@ -45,6 +43,7 @@ class PlayerContext():
         self._song_skipped = False
 
         self.lava_enabled = lava_enabled
+        self.lava_node = lava_node
 
     @property
     def player(self):
@@ -65,8 +64,13 @@ class PlayerContext():
         await self._player.stop()
 
     async def play(self, source):
-        song = Song(LavaSourceAdapter(source) if self.lava_enabled else YTDLSourceAdapter(source))
-        await self.queue.put(song)
+        if isinstance(source, list):
+            for track_source in source:
+                song = Song(LavaSourceAdapter(track_source) if self.lava_enabled else YTDLSourceAdapter(track_source))
+                await self.queue.put(song)
+        else:
+            song = Song(LavaSourceAdapter(source) if self.lava_enabled else YTDLSourceAdapter(source))
+            await self.queue.put(song)
 
         if not self._run_player_task:
             self._player.state = PlayerState.WAITING
@@ -99,6 +103,9 @@ class PlayerContext():
                     print("playercontext timeout")
                     await self._player.stale()
                     await self._player_window.stale()
+                    if self.lava_enabled:
+                        await self._player.voice.destroy()
+                    self._next.clear()
                     break
                 else:
                     if song:
