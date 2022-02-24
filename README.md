@@ -1,2 +1,2 @@
-# music-man
-A next-gen music bot for discord, written in python.py
+# melo
+A next-gen music bot for discord, written in pycord
