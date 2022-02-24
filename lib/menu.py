@@ -25,6 +25,14 @@ class PlayerMenu(ViewMenu):
     async def on_pause_resume(self, interaction):
         await self.ctx.invoke(self.bot.get_command("_play_pause"))
 
+    @menus.button('🔀')
+    async def on_shuffle(self, interaction):
+        await self.ctx.invoke(self.bot.get_command("shuffle"))
+
+    @menus.button('🔁')
+    async def on_loop(self,interaction):
+        await self.ctx.invoke(self.bot.get_command("loop"))
+        
     @menus.button('\N{BLACK RIGHTWARDS ARROW}')
     async def on_skip(self, interaction):
         #await interaction.followup.send("Song Skipped", ephemeral=True)

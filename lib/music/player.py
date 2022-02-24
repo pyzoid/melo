@@ -39,6 +39,8 @@ class PlayerContext():
         self._player = None
         self._player_window = None
         self.current = None
+        self.current_loop = None #song to be looped
+
 
         self._song_skipped = False
 
@@ -88,7 +90,9 @@ class PlayerContext():
     async def _run(self):
         async with self._run_lock:
             while 1:
-                song = None if self.queue.empty() else await self.queue.get()
+                song = self.current_loop
+                if not song:
+                    song = None if self.queue.empty() else await self.queue.get()
                     
                 self.current = song
 
@@ -270,6 +274,10 @@ class BasePlayer(ABC):
         self.state = PlayerState.PAUSED
         await await_me_maybe(self._pause)
 
+    async def seek(self, pos):
+        
+        await await_me_maybe(self._seek, pos=pos)
+
     async def play_track(self, track, callback=None):
         if self.state == PlayerState.STALE:
             return
@@ -313,6 +321,10 @@ class BasePlayer(ABC):
         ...
 
     @abstractmethod
+    def _seek(self, pos):
+        ...
+
+    @abstractmethod
     async def _internal_audio_player(self, track, callback):
         ...
 
@@ -343,6 +355,9 @@ class BasicPlayer(BasePlayer):
     def _pause(self):
         self.voice.pause()
 
+    def _seek(self):
+        pass #maybe have return not supported error or something?
+
     async def _internal_audio_player(self, song, finished_callback):
 
         self.voice.play(song.track.source, after=finished_callback)
@@ -369,6 +384,10 @@ class LavaPlayer(BasicPlayer):
     def _resume(self):
 
         return self.voice.set_pause(False)
+
+    def _seek(self, pos):
+
+        return self.voice.seek(pos)
 
     async def _internal_audio_player(self, song):
 

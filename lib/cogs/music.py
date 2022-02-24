@@ -30,7 +30,12 @@ class Music(Cog):
         config = self.load_config("lib/bot/lavanode.json")
          
         await self.bot.wait_until_ready()
+
+        if self.pomice.nodes:
+            return
+        
         print("Connecting to lavalink node...")
+
         try:
             self.node = self.pomice.get_best_node(algorithm=pomice.NodeAlgorithm.by_ping)
         except pomice.NoNodesAvailable:
@@ -139,8 +144,6 @@ class Music(Cog):
         else:
             
             await ctx.player_context.play(source)
-
-            await ctx.message.delete()
         
     
     @commands.command(name="pause")
@@ -167,7 +170,15 @@ class Music(Cog):
     async def _skip(self, ctx: commands.Context):
 
         if ctx.player_context.current:
+            ctx.player_context.current_loop = None
             await ctx.player_context.skip()
+
+
+    @commands.command(name="shuffle")
+    async def _shuffle(self, ctx: commands.Context):
+        if not ctx.player_context.queue.empty():
+            ctx.player_context.queue.shuffle()
+
     @commands.command(name='restart')
     async def _restart(self, ctx: commands.Context):
 
@@ -195,12 +206,31 @@ class Music(Cog):
         embed = ctx.player_context.current.create_embed()
         await ctx.send(embed=embed)
 
+    @commands.command(name="loop")
+    async def _loop(self, ctx: commands.Context):
+        if not ctx.player_context.current:
+            return 
+
+        ctx.player_context.current_loop = None if ctx.player_context.current_loop else ctx.player_context.current
+
+    @commands.command(name="seek")
+    async def _seek(self, ctx: commands.Context, *, pos: float):
+        if pos < 0:
+            return
+        
+        if pos > ctx.player_context.current.track.raw_duration:
+            return await ctx.send("Cannot seek past song length")
+
+        await ctx.player_context.player.seek(pos*1000)
+
     @commands.command(name="_play_pause", hidden=True)
     async def _play_pause(self, ctx: commands.Context):
         if ctx.player_context.is_playing:
             await ctx.player_context.player.pause()
         else:
             await ctx.player_context.player.resume()
+
+            
 
 def setup(bot):
     bot.add_cog(Music(bot))
