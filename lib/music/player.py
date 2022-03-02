@@ -288,7 +288,7 @@ class BasePlayer(ABC):
         await await_me_maybe(self._seek, pos=pos)
 
     async def volume(self, value):
-        await await_me_maybe(self._volume, value=value*2)
+        await await_me_maybe(self._volume, value=value)
 
     async def play_track(self, track, callback=None):
         if self.state == PlayerState.STALE:

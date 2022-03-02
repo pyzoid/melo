@@ -183,7 +183,7 @@ class Music(Cog):
     @commands.command(name='restart')
     async def _restart(self, ctx: commands.Context):
 
-        ctx.player_context.player.stop()
+        await ctx.player_context.player.stop()
 
         ctx.player_context = self.get_player_context(ctx, reset=True)
 
