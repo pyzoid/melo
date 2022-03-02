@@ -7,6 +7,7 @@ from enum import Enum
 import random
 import itertools
 import discord
+import re
 
 class VoiceError(Exception):
     pass
@@ -97,10 +98,10 @@ class PlayerContext():
                 self.current = song
 
                 self.loop.create_task(self._player.play_track(song, self._playback_finished if not self.lava_enabled else None))
-                self.loop.create_task(self._player_window.player_window(song, PlayerContext.TIMEOUT))
+                self.loop.create_task(self._player_window.player_window(song, 0))
                 try:
                     if song:
-                        await asyncio.wait_for(self._next.wait(), song.track.raw_duration)
+                        await asyncio.wait_for(self._next.wait(), song.track.raw_duration+PlayerContext.TIMEOUT) #gives track wiggle room incase track freezes for couple seconds or whatever
                     else:
                         await asyncio.wait_for(self.queue.item_available(), PlayerContext.TIMEOUT)
                 except asyncio.TimeoutError:
@@ -113,7 +114,8 @@ class PlayerContext():
                     break
                 else:
                     if song:
-                        print(f"Finished playing {song.track.title}")
+                        pass
+                        #print(f"Finished playing {song.track.title}")
                 finally:
                     self._next.clear()
 
@@ -203,7 +205,14 @@ class LavaSourceAdapter(BaseSourceAdapter):
 
     @property
     def thumbnail(self):
-        return self.source.thumbnail
+        resized = None
+
+        if match := re.search(r"\/vi/([\w+-]+)", self.source.thumbnail):
+            if thumb_id := match.group(1):
+                resized = f"https://i.ytimg.com/vi/{thumb_id}/maxresdefault.jpg"
+
+        return resized if resized else self.source.thumbnail
+
     @property
     def length(self):
         return YTDLSource.parse_duration(self._toSeconds(self.source.length))
@@ -278,6 +287,9 @@ class BasePlayer(ABC):
         
         await await_me_maybe(self._seek, pos=pos)
 
+    async def volume(self, value):
+        await await_me_maybe(self._volume, value=value*2)
+
     async def play_track(self, track, callback=None):
         if self.state == PlayerState.STALE:
             return
@@ -295,6 +307,7 @@ class BasePlayer(ABC):
                 return self._internal_audio_player(track, callback) if callback else self._internal_audio_player(track)
 
             await iap()
+
 
     @abstractmethod
     def _stale(self):
@@ -322,6 +335,10 @@ class BasePlayer(ABC):
 
     @abstractmethod
     def _seek(self, pos):
+        ...
+
+    @abstractmethod
+    def _volume(self, value):
         ...
 
     @abstractmethod
@@ -358,6 +375,9 @@ class BasicPlayer(BasePlayer):
     def _seek(self):
         pass #maybe have return not supported error or something?
 
+    def _volume(self, value):
+        self.voice.volume = value/100
+
     async def _internal_audio_player(self, song, finished_callback):
 
         self.voice.play(song.track.source, after=finished_callback)
@@ -389,6 +409,9 @@ class LavaPlayer(BasicPlayer):
 
         return self.voice.seek(pos)
 
+    def _volume(self, value):
+        return self.voice.set_volume(value)
+
     async def _internal_audio_player(self, song):
 
         await self.voice.play(song.track.source)
@@ -407,6 +430,7 @@ class PlayerWindow():
     async def stale(self):
         self.state = PlayerWindowState.STALE
         await self._current_window.delete()
+        await self._menu.stop()
         self._menu = None
 
     async def player_window(self, song, timeout):
@@ -416,19 +440,20 @@ class PlayerWindow():
         create_player_embed = lambda current : current.create_embed() if current else Song.create_empty_embed()
         self.state = PlayerWindowState.ACTIVE
 
-        
-
         if not self._menu or not self._current_window:
-            self._menu = PlayerMenu(self.bot, song.track.raw_duration if song else timeout)
-            await self._menu.send_initial_message(self._ctx, self._ctx.channel, create_player_embed(song))
+            self._menu = PlayerMenu(self.bot, self._ctx, create_player_embed(song), timeout=song.track.raw_duration+timeout if song else timeout)
+            await self._menu.start()
+
             self._current_window = self._menu.message
         else:
             await self._current_window.edit(embed=create_player_embed(song))
-            self._menu = PlayerMenu(self.bot, song.track.raw_duration if song else timeout, self._current_window)
-            #restarts reaction menu when new song is added
-            #self._menu = await PlayerMenu.construct_from_existing(self._current_window, self.bot, song.source.raw_duration if song else timeout)
+            self._menu.disable_all_buttons() if not song else self._menu.enable_all_buttons()
+            await self._menu.restart(song.track.raw_duration+timeout if song else timeout)
+
+                
+      
         
-        await self._menu.start(self._ctx)
+        
   
                     
 

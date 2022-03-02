@@ -10,6 +10,7 @@ from lib.music.source import YTDLSource, YTDLError
 
 # Suppress noise about console usage from errors
 youtube_dl.utils.bug_reports_message = lambda: ''
+msg_delete_time = 10
 
 from lib.music.player import PlayerContext, Song
 
@@ -106,7 +107,7 @@ class Music(Cog):
             pass
 
         if not channel:
-            await ctx.send("You must join a voice channel first")
+            await ctx.send("You must join a voice channel first",delete_after=msg_delete_time)
             return
 
         if ctx.player_context.player:
@@ -140,7 +141,7 @@ class Music(Cog):
             else:
                 source = await YTDLSource.create_source(ctx, query, loop=self.bot.loop)
         except YTDLError as e:
-            await ctx.send('An error occurred while processing this request: {}'.format(str(e)))
+            await ctx.send('An error occurred while processing this request: {}'.format(str(e)),delete_after=msg_delete_time)
         else:
             
             await ctx.player_context.play(source)
@@ -186,20 +187,19 @@ class Music(Cog):
 
         ctx.player_context = self.get_player_context(ctx, reset=True)
 
-        await ctx.send("PlayerContext succesfully reset")
+        await ctx.send("PlayerContext succesfully reset",delete_after=msg_delete_time)
 
     @commands.command(name='volume')
     async def _volume(self, ctx: commands.Context, * ,volume: int):
 
         if not ctx.player_context.player:
-            return await ctx.send("No player instance to set volume for")
-
-        if 0 > volume > 100:
-            return await ctx.send("Volume must be between 0 and 100")
+            return await ctx.send("No player instance to set volume for",delete_after=msg_delete_time)
         
-        ctx.player_context.player.volume = volume / 100
+        if 0 <= volume >= 251:
+            return await ctx.send("Volume must be between 0 and 250",delete_after=msg_delete_time)
+        await ctx.player_context.player.volume(volume)
 
-        await ctx.send('Volume of the player set to {}%'.format(volume))
+        await ctx.send('Volume of the player set to {}%'.format(volume),delete_after=msg_delete_time)
 
     @commands.command(name='playing')
     async def _playing(self, ctx: commands.Context):
@@ -219,7 +219,7 @@ class Music(Cog):
             return
         
         if pos > ctx.player_context.current.track.raw_duration:
-            return await ctx.send("Cannot seek past song length")
+            return await ctx.send("Cannot seek past song length",delete_after=msg_delete_time)
 
         await ctx.player_context.player.seek(pos*1000)
 

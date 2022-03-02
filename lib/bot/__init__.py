@@ -108,6 +108,7 @@ class Bot(BotBase):
         if ctx.command is not None and ctx.guild is not None:
             if self.ready:
                 await self.invoke(ctx)
+                await ctx.message.delete()
             else:
                 await ctx.send("Bot still starting, please wait a few moments...")
         elif message.author.id in OWNER_IDS:
