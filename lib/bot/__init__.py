@@ -1,15 +1,15 @@
 from glob import glob
 from asyncio import sleep
-from discord.ext.commands import Bot as BotBase
-from discord.ext.commands import CommandNotFound, Context, MissingRequiredArgument
-from discord.http import HTTPException, Forbidden
-import discord
+from disnake.ext.commands import Bot as BotBase
+from disnake.ext.commands import CommandNotFound, Context, MissingRequiredArgument
+from disnake.http import HTTPException, Forbidden
+import disnake
 
 PREFIX = "?"
 OWNER_IDS = [226939988070236161]
 COGS = [path.split("/")[-1][:-3].split("\\")[-1] for path in glob("./lib/cogs/*.py")]
 
-Intents=discord.Intents.all()
+Intents=disnake.Intents.all()
 
 class CogReady(object):
     def __init__(self):

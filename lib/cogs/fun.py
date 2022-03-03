@@ -1,6 +1,5 @@
-from discord import slash_command
-from discord.ext.commands import Cog
-from discord.ext.commands import command
+from disnake.ext.commands import Cog
+from disnake.ext.commands import command
 
 class Fun(Cog):
     def __init__(self, bot):
@@ -19,10 +18,6 @@ class Fun(Cog):
     async def echo_message(self, ctx, *, message):
         await ctx.message.delete()
         await ctx.send(message)
-
-    @slash_command(guild_ids=["678809641597140992"])
-    async def test(self, ctx):
-        await ctx.respond("g")
 
 def setup(bot):
     bot.add_cog(Fun(bot))

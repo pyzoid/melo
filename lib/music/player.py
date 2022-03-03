@@ -6,7 +6,7 @@ import asyncio
 from enum import Enum
 import random
 import itertools
-import discord
+import disnake
 import re
 
 class VoiceError(Exception):
@@ -141,7 +141,7 @@ class Song:
         self.track = track
 
     def create_embed(self):
-        return (discord.Embed(title='```{0.track.title}\n```'.format(self), color=discord.Color.blurple())
+        return (disnake.Embed(title='```{0.track.title}\n```'.format(self), color=disnake.Color.blurple())
         .set_image(url=self.track.thumbnail)
         #.add_field(name='Requested by', value=self.requester.mention)
         #.add_field(name='Uploader', value='[{0.source.uploader}]({0.source.uploader_url})'.format(self))
@@ -151,7 +151,7 @@ class Song:
     
     @staticmethod
     def create_empty_embed():
-        return (discord.Embed(title='```No Current Songs In Queue\n```', color=discord.Color.blurple())
+        return (disnake.Embed(title='```No Current Songs In Queue\n```', color=disnake.Color.blurple())
         .set_image(url='https://www.clipartmax.com/png/middle/307-3076576_song-clipart-music-bar-paper.png')
         .set_author(name="Now playing"))
 class BaseSourceAdapter(ABC):
@@ -449,13 +449,3 @@ class PlayerWindow():
             await self._current_window.edit(embed=create_player_embed(song))
             self._menu.disable_all_buttons() if not song else self._menu.enable_all_buttons()
             await self._menu.restart(song.track.raw_duration+timeout if song else timeout)
-
-                
-      
-        
-        
-  
-                    
-
-
-

@@ -1,5 +1,5 @@
-from discord.ext import commands
-import discord
+from disnake.ext import commands
+import disnake
 import youtube_dl
 import asyncio
 import functools
@@ -10,7 +10,7 @@ youtube_dl.utils.bug_reports_message = lambda: ''
 class YTDLError(Exception):
     pass
 
-class YTDLSource(discord.PCMVolumeTransformer):
+class YTDLSource(disnake.PCMVolumeTransformer):
     ytdl_format_options = {
         'format': 'bestaudio/best',
         'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
@@ -31,7 +31,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
     }   
     ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
 
-    def __init__(self, ctx:commands.Context, source: discord.FFmpegPCMAudio, *, data: dict, volume=0.5):
+    def __init__(self, ctx:commands.Context, source: disnake.FFmpegPCMAudio, *, data: dict, volume=0.5):
         super().__init__(source, volume)
 
         self.requester = ctx.author
@@ -94,7 +94,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
                 except IndexError:
                     raise YTDLError('Couldn\'t retrieve any matches for `{}`'.format(webpage_url))
 
-        return cls(ctx, discord.FFmpegPCMAudio(info['url'], **cls.ffmpeg_options), data=info)
+        return cls(ctx, disnake.FFmpegPCMAudio(info['url'], **cls.ffmpeg_options), data=info)
 
     @staticmethod
     def parse_duration(duration: int):

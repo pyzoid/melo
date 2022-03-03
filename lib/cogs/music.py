@@ -1,11 +1,11 @@
-from discord.ext.commands import Cog
-from discord.ext.commands import command
-from discord.ext import commands
-import discord
+from disnake.ext.commands import Cog
+from disnake.ext.commands import command
+from disnake.ext import commands
+import disnake
 import youtube_dl
 import pomice
 import json
-from discord.utils import get
+from disnake.utils import get
 from lib.music.source import YTDLSource, YTDLError
 
 # Suppress noise about console usage from errors
@@ -57,8 +57,6 @@ class Music(Cog):
             else:
                 print("Node created")
 
-        else:
-            await self.node.connect()
         
         print("Node connected")
 
@@ -88,7 +86,7 @@ class Music(Cog):
     @command(name="stats") 
     async def _stats(self, ctx):
         stats = self.pomice.get_node(identifier="MAIN").stats
-        await ctx.send(embed=(discord.Embed(title="Node Stats", color=discord.Color.dark_red()))
+        await ctx.send(embed=(disnake.Embed(title="Node Stats", color=disnake.Color.dark_red()))
         .add_field(name="CPU_CORES", value=stats.cpu_cores, inline=True)
         .add_field(name="CPU_PROCESS_LOAD", value=stats.cpu_process_load, inline=True)
         .add_field(name="ACTIVE_PLAYERS", value=stats.players_active, inline=True)

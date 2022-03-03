@@ -1,6 +1,6 @@
 from discord.ext import menus
 from reactionmenu import ViewMenu, ViewButton
-import discord
+import disnake
 import asyncio
 
 class PlayerMenu(ViewMenu):
