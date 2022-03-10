@@ -4,9 +4,9 @@ import disnake
 import asyncio
 
 class PlayerMenu(ViewMenu):
-    def __init__(self, bot, ctx, embed, **kwargs) -> None:
-        super().__init__(ctx=ctx, menu_type=ViewMenu.TypeEmbed, show_page_director=False, **kwargs)
-
+    def __init__(self, bot, channel, embed, **kwargs) -> None:
+        super().__init__(ctx=None, menu_type=ViewMenu.TypeEmbed, show_page_director=False, **kwargs)
+    
         self.bot = bot
         self.add_page(embed)
 
@@ -25,16 +25,16 @@ class PlayerMenu(ViewMenu):
         await self._ctx.invoke(self.bot.get_command("_play_pause"))
 
     async def on_shuffle(self):
-        await self._ctx.invoke(self.bot.get_command("shuffle"))
+        await self._ctx.invoke(self.bot.get_slash_command("shuffle"))
 
     async def on_loop(self):
-        await self._ctx.invoke(self.bot.get_command("loop"))
+        await self._ctx.invoke(self.bot.get_slash_command("loop"))
 
     async def on_skip(self):
-        await self._ctx.invoke(self.bot.get_command('skip'))
+        await self._ctx.invoke(self.bot.get_slash_command('skip'))
 
     async def on_stop(self):
-        await self._ctx.invoke(self.bot.get_command('stop'))
+        await self._ctx.invoke(self.bot.get_slash_command('stop'))
 
     async def restart(self, timeout):
         self._menu_timed_out = False

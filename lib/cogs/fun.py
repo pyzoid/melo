@@ -1,5 +1,4 @@
-from disnake.ext.commands import Cog
-from disnake.ext.commands import command
+from disnake.ext.commands import Cog, command, slash_command,Context
 
 class Fun(Cog):
     def __init__(self, bot):

@@ -27,8 +27,8 @@ class PlayerWindowState(Enum):
 class PlayerContext():
     TIMEOUT = 60
 
-    def __init__(self, ctx, bot, lava_enabled=False, lava_node=None):
-        self._ctx = ctx
+    def __init__(self, interaction: disnake.CommandInteraction, bot, lava_enabled=False, lava_node=None):
+        self._inter = interaction
         self._bot = bot
         self.loop = bot.loop
         self.queue = SongQueue()
@@ -132,7 +132,7 @@ class PlayerContext():
     @player.setter
     def player(self, voice_client):
         self._player = BasicPlayer(self._bot, voice_client) if not self.lava_enabled else LavaPlayer(self._bot, voice_client)
-        self._player_window = PlayerWindow(self._bot, self._ctx)
+        self._player_window = PlayerWindow(self._bot, self._inter.channel, self._inter.author)
 
 class Song:
     __slots__ = ('track') #more mem efficent and faster than __dict__
@@ -419,10 +419,11 @@ class LavaPlayer(BasicPlayer):
         self.state = PlayerState.PLAYING
 
 class PlayerWindow():
-    def __init__(self, bot, ctx):
+    def __init__(self, bot, channel, author):
         self.bot = bot
         self.loop = bot.loop
-        self._ctx = ctx
+        self.channel = channel
+        self.author = author
         self.state = PlayerWindowState.NOT_CREATED
         self._current_window = None
         self._menu = None
@@ -441,9 +442,11 @@ class PlayerWindow():
         self.state = PlayerWindowState.ACTIVE
 
         if not self._menu or not self._current_window:
-            self._menu = PlayerMenu(self.bot, self._ctx, create_player_embed(song), timeout=song.track.raw_duration+timeout if song else timeout)
-            await self._menu.start()
-
+            self._menu = PlayerMenu(self.bot, self.channel, create_player_embed(song), timeout=song.track.raw_duration+timeout if song else timeout)
+            await self._menu.start(send_to=self.channel)
+            
+            self._menu._ctx = await self.bot.get_context(self._menu.message)
+            self._menu._ctx.author = self.author #injects slash command author 
             self._current_window = self._menu.message
         else:
             await self._current_window.edit(embed=create_player_embed(song))
